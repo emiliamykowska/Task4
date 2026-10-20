@@ -1,2 +1,4 @@
 .streamlit
 .venv
+data
+__pycache__
