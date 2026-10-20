@@ -179,31 +179,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "count_entities",
-            "description": "Count users, book or orders in chosen store",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entity": {
-                        "type": "string",
-                        "enum": ["users", "books", "orders"],
-                        "description": "users, books, or orders",
-                    },
-                    "store_num": {
-                        "type": "integer",
-                        "enum": [1, 2, 3, 4, 5],
-                        "description": "Store number from 1 to 5",
-                    },
-                },
-                "required": ["entity", "store_num"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "filter_dataset",
-            "description": "Filter chosen dataset by condition or value",
+            "name": "filter_dashboard",
+            "description": "Change the dashboard under some condition. Use when user wants to only filter values, but doesn not want any specific value.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -246,6 +223,43 @@ TOOLS = [
                     }
                 },
                 "required": ["dataset"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_entities",
+            "description": "Count values after filtering by some condition. If filters, columns and value are not provided, counts the whole entity",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "store_num": {
+                        "type": "integer",
+                        "enum": [1, 2, 3, 4, 5],
+                        "description": "Number of chosen store",
+                    },
+                    "entity": {
+                        "type": "string",
+                        "enum": ["users", "books", "orders"],
+                        "description": "users, books, orders or best_days",
+                    },
+                    "column_name": {
+                        "type": "string",
+                        "enum": COLUMNS,
+                        "description": "Column to be filtered",
+                    },
+                    "condition": {
+                        "type": "string",
+                        "enum": CONDITIONS,
+                        "description": "Condition by which column should be filtered",
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "One or more values to filter against, f.e. 'p', 'p or s'",
+                    },
+                },
+                "required": ["store_num", "entity"],
             },
         },
     },

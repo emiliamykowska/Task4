@@ -16,9 +16,12 @@ If you can't find the data, ask for clarification question instead of guessing.
 If a user does not specify the store number, ask for it.
 If a user declares a store number, use it as store_num parameter. 
 Multiple values are passed as one string separated by " or ".
-After filter_dataset and clear_filters the dashboard updates automatically.
+After filter_dashboard and clear_filters the dashboard updates automatically.
 When you need to use a tool, directly apply it ang give only the answer, don't say that you need to use a particular tool.
 Filters and filters cleaning are applied on all stores at once.
+For "how many"/"count" questions call count_entities. count_entities itself can filter: pass column_name, condition and value to count only matching rows (do not call filter_dataset first).
+filter_dashboard is only for changing what the dashboard table shows. It filters all the stores at once. After using filter_dashboard tool do not show the result in chat, just say that filters were applied.
+If question regards the number of authors, shipping or address use contains instead of equals.
 
 Available datasets:
 1. books
@@ -116,18 +119,39 @@ def get_best_customer_ids(store_num: int = 1):
     return str(df.iat[0, 3])
 
 
-def count_entities(entity: str, store_num: int = 1):
+def count_entities(
+    entity: str,
+    store_num: int,
+    column_name: str = None,
+    condition: str = None,
+    value: str = None,
+):
     if store_num not in range(1, 6):
         return "Wrong store number, available ones are 1 - 5"
 
     if entity not in ["users", "books", "orders"]:
         return "Please tell if you want to count books, orders or users"
 
-    entities = load_store_data(store_num, entity)
-    return len(entities)
+    df = load_store_data(store_num, entity)
+
+    if column_name is None and condition is None and value is None:
+        return len(df)
+
+    if column_name is None or condition is None or value is None:
+        return (
+            "To count filtered records please provide column name, condition, and value"
+        )
+
+    if column_name not in df.columns:
+        return f"Column not found. Available columns: {df.columns.tolist()}"
+
+    if condition not in CONDITIONS:
+        return f"Invalid condition. Available conditions: {CONDITIONS}"
+
+    return len(apply_filters(df.copy(), column_name, condition, value))
 
 
-def filter_dataset(dataset: str, column_name: str, condition: str, value: str):
+def filter_dashboard(dataset: str, column_name: str, condition: str, value: str):
     if dataset not in st.session_state.filters:
         return "Valid datasets are books, users and orders"
 
@@ -145,7 +169,7 @@ def filter_dataset(dataset: str, column_name: str, condition: str, value: str):
     )
     st.session_state["view"] = dataset
 
-    return f"Filter with condition {condition} and value {value} was applied on {dataset}.{column_name}"
+    return "Filter was applied, see updated tables at the top of the screen"
 
 
 def clear_filters(dataset: str):
@@ -161,6 +185,54 @@ def clear_filters(dataset: str):
     st.session_state.filters[dataset] = []
     st.session_state["view"] = dataset
     return f"Filters on {dataset} dataset were cleared"
+
+
+def apply_filters(df_entity, column_name: str, condition: str, value: str):
+    if column_name in df_entity.columns:
+        series = df_entity[column_name].astype("string")
+        value_lowercase = str(value).lower()
+        values = tuple(
+            v.strip() for v in value_lowercase.replace(" or ", ",").split(",")
+        )
+
+        if condition == "startswith":
+            df_entity = df_entity[series.str.lower().str.startswith(values)]
+        elif condition == "contains":
+            reg = "|".join(values)
+            df_entity = df_entity[series.str.contains(reg, case=False, regex=True)]
+        elif condition == "endswith":
+            df_entity = df_entity[series.str.lower().str.endswith(values)]
+        elif condition == "equals":
+            if len(values) > 1:
+                df_entity = df_entity[series.str.lower().isin(values)]
+            else:
+                df_entity = df_entity[series.str.lower() == str(value).lower()]
+        elif condition == "not_startswith":
+            df_entity = df_entity[~series.str.lower().str.startswith(values)]
+        elif condition == "not_contains":
+            reg = "|".join(values)
+            df_entity = df_entity[~series.str.contains(reg, case=False, regex=True)]
+        elif condition == "not_endswith":
+            df_entity = df_entity[~series.str.lower().str.endswith(values)]
+        elif condition == "not_equals":
+            if len(values) > 1:
+                df_entity = df_entity[~series.str.lower().isin(values)]
+            else:
+                df_entity = df_entity[~(series.str.lower() == str(value).lower())]
+        elif condition == "greater_than":
+            try:
+                series = pd.to_numeric(series)
+                df_entity = df_entity[series > float(value)]
+            except Exception:
+                pass
+        elif condition == "less_than":
+            try:
+                series = pd.to_numeric(series)
+                df_entity = df_entity[series < float(value)]
+            except Exception:
+                pass
+
+    return df_entity
 
 
 st.html("""
@@ -209,60 +281,7 @@ for i, tab in enumerate(tabs, start=1):
                 condition = fil["condition"]
                 value = fil["value"]
 
-                if column in df_entity.columns:
-                    series = df_entity[column].astype("string")
-                    value_lowercase = str(value).lower()
-                    values = tuple(
-                        v.strip()
-                        for v in value_lowercase.replace(" or ", ",").split(",")
-                    )
-
-                    if condition == "startswith":
-                        df_entity = df_entity[series.str.lower().str.startswith(values)]
-                    elif condition == "contains":
-                        reg = pattern = "|".join(values)
-                        df_entity = df_entity[
-                            series.str.contains(reg, case=False, regex=True)
-                        ]
-                    elif condition == "endswith":
-                        df_entity = df_entity[series.str.lower().str.endswith(values)]
-                    elif condition == "equals":
-                        if len(values) > 1:
-                            df_entity = df_entity[series.str.lower().isin(values)]
-                        else:
-                            df_entity = df_entity[
-                                series.str.lower() == str(value).lower()
-                            ]
-                    elif condition == "not_startswith":
-                        df_entity = df_entity[
-                            ~series.str.lower().str.startswith(values)
-                        ]
-                    elif condition == "not_contains":
-                        reg = pattern = "|".join(values)
-                        df_entity = df_entity[
-                            ~series.str.contains(reg, case=False, regex=True)
-                        ]
-                    elif condition == "not_endswith":
-                        df_entity = df_entity[~series.str.lower().str.endswith(values)]
-                    elif condition == "not_equals":
-                        if len(values) > 1:
-                            df_entity = df_entity[~series.str.lower().isin(values)]
-                        else:
-                            df_entity = df_entity[
-                                ~(series.str.lower() == str(value).lower())
-                            ]
-                    elif condition == "greater_than":
-                        try:
-                            series = pd.to_numeric(series)
-                            df_entity = df_entity[series > float(value)]
-                        except Exception:
-                            pass
-                    elif condition == "less_than":
-                        try:
-                            series = pd.to_numeric(series)
-                            df_entity = df_entity[series < float(value)]
-                        except Exception:
-                            pass
+                df_entity = apply_filters(df_entity, column, condition, value)
 
         st.dataframe(df_entity, hide_index=True)
         st.subheader("Summary table")
@@ -305,66 +324,68 @@ if prompt := st.chat_input("Ask something"):
             "get_best_author": get_best_author,
             "get_best_customer_ids": get_best_customer_ids,
             "count_entities": count_entities,
-            "filter_dataset": filter_dataset,
+            "filter_dashboard": filter_dashboard,
             "clear_filters": clear_filters,
         }
 
+        filters_changed = False
+
         try:
             with st.spinner("Analyzing the request"):
-                response = client.chat.completions.create(
-                    model=st.session_state["openai_model"],
-                    messages=messages,
-                    tools=TOOLS,
-                    timeout=120,
-                )
+                while True:
+                    response = client.chat.completions.create(
+                        model=st.session_state["openai_model"],
+                        messages=messages,
+                        tools=TOOLS,
+                        timeout=120,
+                    )
 
-                response_message = response.choices[0].message
+                    response_message = response.choices[0].message
+
+                    if response_message.tool_calls:
+                        messages.append(response_message)
+
+                        for tool_call in response_message.tool_calls:
+                            function_name = tool_call.function.name
+                            arguments = json.loads(tool_call.function.arguments)
+                            function_response = existing_functions[function_name](
+                                **arguments
+                            )
+
+                            messages.append(
+                                {
+                                    "tool_call_id": tool_call.id,
+                                    "role": "tool",
+                                    "name": function_name,
+                                    "content": str(function_response),
+                                }
+                            )
+
+                            if function_name in ["filter_dashboard", "clear_filters"]:
+                                filters_changed = True
+                                st.session_state.messages.append(
+                                    {
+                                        "role": "assistant",
+                                        "content": str(function_response),
+                                    }
+                                )
+                    else:
+                        break
+
+                final_text = response_message.content
+
+            if final_text.strip() and not filters_changed:
+                st.markdown(final_text)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": final_text}
+                )
+            else:
+                st.markdown(
+                    "I couldn't generate the answer, please specify your request: store number, column name etc."
+                )
 
         except Exception as e:
             st.error(f"Could not analyze the request: {e}")
-            st.stop()
 
-        if response_message.tool_calls:
-            messages.append(response_message)
-
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-                arguments = json.loads(tool_call.function.arguments)
-                function_response = existing_functions[function_name](**arguments)
-
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": str(function_response),
-                    }
-                )
-
-                if function_name in ["filter_dataset", "clear_filters"]:
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": str(function_response)}
-                    )
-                    st.rerun()
-
-        try:
-            with st.spinner("Generating the answer"):
-                stream = client.chat.completions.create(
-                    model=st.session_state["openai_model"],
-                    messages=messages,
-                    stream=True,
-                    tools=TOOLS,
-                    timeout=120,
-                )
-
-                response = st.write_stream(stream)
-
-                if not response.strip():
-                    st.markdown(
-                        "I couldn't generate the answer, please specify your request: store number, columns etc."
-                    )
-
-        except Exception as e:
-            st.error(f"Could not generate the answer: {e}")
-
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        if any(st.session_state.filters[k] for k in st.session_state.filters) or view:
+            st.rerun()
