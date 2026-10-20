@@ -4,7 +4,10 @@ from openai import OpenAI
 import json
 from tools import TOOLS, CONDITIONS
 
-client = OpenAI(api_key="sk-no-key-required", base_url="http://192.168.5.30:8080/v1")
+client = OpenAI(
+    api_key=st.secrets["OPENAI_API_KEY"],
+    base_url="https://api.groq.com/openai/v1",
+)
 
 first_prompt = """
 You are an analitycal assistant for 5 stores. Use avaiable tools to answer questions. 
@@ -14,6 +17,7 @@ If a user does not specify the store number, ask for it.
 If a user declares a store number, use it as store_num parameter. 
 Multiple values are passed as one string separated by " or ".
 After filter_dataset and clear_filters the dashboard updates automatically.
+When you need to use a tool, directly apply it ang give only the answer, don't say that you need to use a particular tool.
 
 Available datasets:
 1. books
@@ -271,7 +275,7 @@ for i, tab in enumerate(tabs, start=1):
 st.subheader("Chat bot")
 
 if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "qwen3-8-flash-next"
+    st.session_state["openai_model"] = "openai/gpt-oss-120b"
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -310,7 +314,7 @@ if prompt := st.chat_input("Ask something"):
                     model=st.session_state["openai_model"],
                     messages=messages,
                     tools=TOOLS,
-                    timeout=60,
+                    timeout=120,
                 )
 
                 response_message = response.choices[0].message
@@ -349,13 +353,12 @@ if prompt := st.chat_input("Ask something"):
                     messages=messages,
                     stream=True,
                     tools=TOOLS,
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-                    timeout=60,
+                    timeout=120,
                 )
 
-                answer = st.write_stream(stream)
+                response = st.write_stream(stream)
 
-                if not answer.strip():
+                if not response.strip():
                     st.markdown(
                         "I couldn't generate the answer, please specify your request: store number, columns etc."
                     )
@@ -363,4 +366,4 @@ if prompt := st.chat_input("Ask something"):
         except Exception as e:
             st.error(f"Could not generate the answer: {e}")
 
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.session_state.messages.append({"role": "assistant", "content": response})
