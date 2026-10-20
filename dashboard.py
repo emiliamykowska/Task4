@@ -18,6 +18,7 @@ If a user declares a store number, use it as store_num parameter.
 Multiple values are passed as one string separated by " or ".
 After filter_dataset and clear_filters the dashboard updates automatically.
 When you need to use a tool, directly apply it ang give only the answer, don't say that you need to use a particular tool.
+Filters and filters cleaning are applied on all stores at once.
 
 Available datasets:
 1. books
